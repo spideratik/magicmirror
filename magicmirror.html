@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Magic Mirror</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter & Space Grotesk -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=Space+Grotesk:wght@300;400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        mirror: {
+                            black: '#000000',
+                            white: '#FFFFFF',
+                            dim: '#8E8E93',
+                            accent: 'var(--theme-accent)',
+                            glow: 'var(--theme-glow)',
+                            card: 'rgba(255, 255, 255, 0.05)',
+                            border: 'var(--theme-border)',
+                            danger: '#FF453A'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Space Grotesk', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            /* Default OLED Cyan Theme */
+            --theme-accent: #64FFDA;
+            --theme-glow: rgba(100, 255, 218, 0.7);
+            --theme-border: rgba(100, 255, 218, 0.25);
+            --theme-text-accent: #64FFDA;
+        }
+
+        /* Golden Luxury Theme */
+        [data-theme="golden"] {
+            --theme-accent: #FFD700;
+            --theme-glow: rgba(255, 215, 0, 0.8);
+            --theme-border: rgba(255, 215, 0, 0.3);
+            --theme-text-accent: #FFD700;
+        }
+
+        /* White & Pink Elegance Theme */
+        [data-theme="pink"] {
+            --theme-accent: #FF80BF;
+            --theme-glow: rgba(255, 128, 191, 0.85);
+            --theme-border: rgba(255, 128, 191, 0.3);
+            --theme-text-accent: #FF80BF;
+        }
+
+        /* Emerald Neon Theme */
+        [data-theme="emerald"] {
+            --theme-accent: #00FF87;
+            --theme-glow: rgba(0, 255, 135, 0.8);
+            --theme-border: rgba(0, 255, 135, 0.3);
+            --theme-text-accent: #00FF87;
+        }
+
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            overflow: hidden;
+        }
+        
+        /* Glass reflection glowing effects */
+        .mirror-glow {
+            text-shadow: 0 0 14px rgba(255, 255, 255, 0.7);
+        }
+        .theme-glow {
+            text-shadow: 0 0 16px var(--theme-glow);
+            color: var(--theme-text-accent);
+        }
+        .danger-glow {
+            text-shadow: 0 0 14px rgba(255, 69, 58, 0.8);
+        }
+        .theme-border {
+            border-color: var(--theme-border);
+        }
+        .theme-bg-accent {
+            background-color: var(--theme-accent);
+        }
+        .theme-text {
+            color: var(--theme-text-accent);
+        }
+        /* Voice Listening Pulse Animation */
+        .voice-pulse {
+            box-shadow: 0 0 0 0 var(--theme-glow);
+            animation: pulse-ring 1.5s infinite cubic-bezier(0.66, 0, 0, 1);
+        }
+        @keyframes pulse-ring {
+            to { box-shadow: 0 0 0 15px rgba(0, 0, 0, 0); }
+        }
+        /* Alarm Glow Banner */
+        .alarm-glow-active {
+            box-shadow: 0 0 35px var(--theme-glow);
+            animation: alarm-pulse 1s infinite alternate;
+        }
+        @keyframes alarm-pulse {
+            from { border-color: var(--theme-border); }
+            to { border-color: var(--theme-accent); }
+        }
+        /* Custom scrollbar for touch logs */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between p-6 sm:p-10 relative">
+
+    <!-- TOP BAR: Clock & Date (Left) | Calendar Grid & Settings (Right) -->
+    <header class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start z-10">
+        
+        <!-- TOP LEFT: Digital Clock & Date -->
+        <div class="flex flex-col space-y-1">
+            <div id="clock" class="text-6xl sm:text-7xl lg:text-8xl font-thin tracking-tight font-mono mirror-glow leading-none">
+                00:00<span class="text-3xl sm:text-4xl font-light theme-text ml-2" id="seconds">00</span>
+            </div>
+            <div id="full-date" class="text-lg sm:text-xl text-mirror-white font-light tracking-widest uppercase mt-2">
+                Loading date...
+            </div>
+            <div id="weather-sim" class="flex items-center space-y-0 space-x-3 text-mirror-dim text-sm mt-1">
+                <span><i class="fa-solid fa-cloud-sun theme-text mr-1"></i> 24°C / 75°F</span>
+                <span>•</span>
+                <span>Indoor Humidity: 45%</span>
+            </div>
+        </div>
+
+        <!-- TOP RIGHT: Calendar Widget & Theme Controls -->
+        <div class="flex flex-col items-start md:items-end space-y-3">
+            <div class="bg-mirror-card border theme-border rounded-2xl p-4 w-72 backdrop-blur-md">
+                <div class="flex justify-between items-center mb-3">
+                    <span id="calendar-month-year" class="font-mono text-sm tracking-widest text-mirror-white uppercase font-bold">Month Year</span>
+                    <button onclick="toggleSettingsModal()" class="text-mirror-dim hover:theme-text transition text-xs" title="Mirror Settings">
+                        <i class="fa-solid fa-palette text-sm"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center text-xs text-mirror-dim mb-2 font-mono">
+                    <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
+                </div>
+                <div id="calendar-days" class="grid grid-cols-7 gap-1 text-center text-xs font-mono">
+                    <!-- Dynamic Calendar Grid -->
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CENTER BANNER: Personal Greeting & Presence Status -->
+    <main class="my-auto text-center z-10 py-4 transition-all duration-700" id="greeting-container">
+        <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-mirror-card border theme-border mb-3 text-xs tracking-widest uppercase">
+            <span id="status-dot" class="w-2.5 h-2.5 rounded-full theme-bg-accent animate-pulse"></span>
+            <span id="recognition-status-text" class="text-mirror-white font-mono">Owner Identified</span>
+        </div>
+        <h1 id="greeting-title" class="text-3xl sm:text-5xl font-extralight tracking-wide text-mirror-white mirror-glow">
+            Good morning, Sarah.
+        </h1>
+        <p id="greeting-subtitle" class="text-base sm:text-lg theme-glow mt-2 font-light max-w-xl mx-auto">
+            "You look fresh and ready to conquer the day!"
+        </p>
+
+        <!-- Live Voice Speech Transcript Visualizer Bar -->
+        <div id="voice-transcript-bar" class="mt-4 max-w-md mx-auto hidden transition-all">
+            <div class="inline-flex items-center space-x-3 bg-black/70 border theme-border rounded-xl px-4 py-2 text-xs font-mono">
+                <span id="mic-pulse-dot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                <span class="theme-text">Voice System:</span>
+                <span id="voice-transcript-text" class="text-mirror-white italic">Listening... Say "Take a note..."</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- BOTTOM BAR: Notes & Reminders (Left) | Security Camera & Intruder Log (Right) -->
+    <footer class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end z-10">
+        
+        <!-- BOTTOM LEFT: Notes & Reminders Module with Voice Button -->
+        <div class="bg-mirror-card border theme-border rounded-2xl p-4 sm:p-5 max-w-md w-full backdrop-blur-md transition-all" id="notes-module">
+            <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-list-check theme-text"></i>
+                    <h2 class="text-sm font-semibold tracking-wider uppercase text-mirror-white">Notes & Reminders</h2>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <!-- Voice Listening Toggle Button -->
+                    <button id="mic-btn" onclick="toggleVoiceListening()" title="Speak Voice Command" 
+                        class="text-xs border theme-border theme-text px-2.5 py-1 rounded-lg transition hover:bg-white/10 flex items-center space-x-1">
+                        <i class="fa-solid fa-microphone"></i>
+                        <span id="mic-btn-label">Listen</span>
+                    </button>
+                    <!-- Manual Add Button -->
+                    <button onclick="toggleAddNoteModal()" class="text-xs bg-white/10 hover:bg-white/20 text-mirror-white px-2.5 py-1 rounded-lg border border-mirror-border transition">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Notes List -->
+            <ul id="notes-list" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                <!-- Dynamic Notes Populated Here -->
+            </ul>
+        </div>
+
+        <!-- BOTTOM RIGHT: Camera & Security Surveillance -->
+        <div class="flex flex-col items-start md:items-end space-y-3">
+            <div class="bg-mirror-card border theme-border rounded-2xl p-4 w-full md:w-80 backdrop-blur-md">
+                <div class="flex justify-between items-center mb-2">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-shield-halved theme-text"></i>
+                        <span class="text-xs font-semibold tracking-wider uppercase text-mirror-white">Smart Vision</span>
+                    </div>
+                    <!-- Mode Switcher Toggle Button -->
+                    <button onclick="togglePersonMode()" id="mode-toggle-btn" class="text-xs px-2 py-0.5 rounded border theme-border theme-text hover:bg-white/10 transition font-mono">
+                        Simulate: Guest
+                    </button>
+                </div>
+
+                <!-- WebCam Feed Display / Thumbnail -->
+                <div class="relative w-full h-32 bg-black rounded-lg overflow-hidden border border-mirror-border group">
+                    <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover opacity-80"></video>
+                    <canvas id="snapshot-canvas" class="hidden"></canvas>
+                    
+                    <!-- Scanner Overlay Animation -->
+                    <div class="absolute inset-0 border-2 theme-border rounded-lg pointer-events-none flex flex-col justify-between p-2">
+                        <div class="flex justify-between text-[10px] font-mono theme-text opacity-80">
+                            <span>CAM_01 ACTIVE</span>
+                            <span id="fps-counter">30 FPS</span>
+                        </div>
+                        <div class="w-full h-0.5 theme-bg-accent opacity-60 animate-pulse"></div>
+                    </div>
+                </div>
+
+                <!-- Intruder Gallery Launcher Button -->
+                <div class="flex justify-between items-center mt-3 pt-2 border-t border-mirror-border/50 text-xs text-mirror-dim">
+                    <span id="intruder-count-text">0 Intruder Snaps</span>
+                    <button onclick="openGalleryModal()" class="theme-text hover:underline font-mono">
+                        View Log (<span id="log-count">0</span>)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- MODAL: THEME SELECTION & SETTINGS -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+        <div class="bg-black border theme-border rounded-2xl p-6 w-full max-w-md space-y-5">
+            <div class="flex justify-between items-center border-b border-white/10 pb-3">
+                <h3 class="text-lg font-light text-mirror-white flex items-center gap-2">
+                    <i class="fa-solid fa-palette theme-text"></i> Glass Display Themes
+                </h3>
+                <button onclick="toggleSettingsModal()" class="text-mirror-dim hover:text-mirror-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-mirror-dim">Select a high-contrast theme engineered for two-way mirror glass visibility:</p>
+
+            <div class="grid grid-cols-2 gap-3">
+                <!-- Theme Option 1: OLED Cyan -->
+                <button onclick="setTheme('default')" class="flex flex-col items-start p-3 rounded-xl border border-white/20 bg-white/5 hover:border-[#64FFDA] transition text-left group">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="w-4 h-4 rounded-full bg-[#64FFDA] shadow-[0_0_8px_#64FFDA]"></span>
+                        <span class="text-xs font-mono text-mirror-white">OLED Cyan</span>
+                    </div>
+                    <span class="text-[10px] text-mirror-dim">Cyber high-contrast default</span>
+                </button>
+
+                <!-- Theme Option 2: Golden Luxury -->
+                <button onclick="setTheme('golden')" class="flex flex-col items-start p-3 rounded-xl border border-white/20 bg-white/5 hover:border-[#FFD700] transition text-left group">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="w-4 h-4 rounded-full bg-[#FFD700] shadow-[0_0_8px_#FFD700]"></span>
+                        <span class="text-xs font-mono text-mirror-white">Golden Luxury</span>
+                    </div>
+                    <span class="text-[10px] text-mirror-dim">Warm luxurious gold glow</span>
+                </button>
+
+                <!-- Theme Option 3: White & Pink Elegance -->
+                <button onclick="setTheme('pink')" class="flex flex-col items-start p-3 rounded-xl border border-white/20 bg-white/5 hover:border-[#FF80BF] transition text-left group">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="w-4 h-4 rounded-full bg-[#FF80BF] shadow-[0_0_8px_#FF80BF]"></span>
+                        <span class="text-xs font-mono text-mirror-white">Pink Elegance</span>
+                    </div>
+                    <span class="text-[10px] text-mirror-dim">Rose gold & soft pink accents</span>
+                </button>
+
+                <!-- Theme Option 4: Emerald Neon -->
+                <button onclick="setTheme('emerald')" class="flex flex-col items-start p-3 rounded-xl border border-white/20 bg-white/5 hover:border-[#00FF87] transition text-left group">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="w-4 h-4 rounded-full bg-[#00FF87] shadow-[0_0_8px_#00FF87]"></span>
+                        <span class="text-xs font-mono text-mirror-white">Emerald Neon</span>
+                    </div>
+                    <span class="text-[10px] text-mirror-dim">Vivid mint green luminescence</span>
+                </button>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="toggleSettingsModal()" class="px-5 py-2 rounded-xl text-xs font-mono bg-white/10 text-mirror-white hover:bg-white/20 transition">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: ADD / SCHEDULE NOTE -->
+    <div id="note-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+        <div class="bg-black border theme-border rounded-2xl p-6 w-full max-w-sm space-y-4">
+            <h3 class="text-lg font-semibold text-mirror-white flex items-center gap-2">
+                <i class="fa-solid fa-pen-to-square theme-text"></i> Add Reminder Note
+            </h3>
+            <input type="text" id="note-input" placeholder="e.g. Call dentist or take vitamins" 
+                class="w-full bg-white/5 border theme-border rounded-xl px-4 py-3 text-mirror-white placeholder-mirror-dim focus:outline-none focus:border-white font-light text-sm">
+            
+            <div class="space-y-1">
+                <label class="text-[11px] font-mono text-mirror-dim">SCHEDULE VOICE ALARM (OPTIONAL)</label>
+                <input type="datetime-local" id="note-time-input" 
+                    class="w-full bg-white/5 border theme-border rounded-xl px-3 py-2 text-mirror-white focus:outline-none text-xs font-mono">
+            </div>
+
+            <div class="flex justify-end space-x-3 pt-2">
+                <button onclick="toggleAddNoteModal()" class="px-4 py-2 rounded-xl text-xs font-mono text-mirror-dim hover:text-mirror-white">CANCEL</button>
+                <button onclick="saveNote()" class="px-4 py-2 rounded-xl text-xs font-mono theme-bg-accent text-black font-semibold hover:opacity-90">SAVE NOTE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: LIVE ALARM ANNOUNCEMENT MODAL -->
+    <div id="alarm-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md hidden items-center justify-center z-50 p-6">
+        <div class="bg-black border-2 theme-border alarm-glow-active rounded-3xl p-8 max-w-md w-full text-center space-y-5">
+            <div class="w-16 h-16 rounded-full theme-bg-accent text-black flex items-center justify-center mx-auto text-2xl animate-bounce">
+                <i class="fa-solid fa-bell"></i>
+            </div>
+            <div>
+                <span class="text-xs font-mono theme-text tracking-widest uppercase">SCHEDULED VOICE REMINDER</span>
+                <h3 id="alarm-note-text" class="text-2xl font-light text-mirror-white mt-2 mirror-glow">"Reminder content..."</h3>
+            </div>
+            <button onclick="dismissAlarm()" class="px-6 py-2.5 rounded-full font-mono text-xs theme-bg-accent text-black font-bold uppercase tracking-wider hover:opacity-90">
+                DISMISS ALARM
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL 3: INTRUDER LOG GALLERY -->
+    <div id="gallery-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md hidden flex-col z-50 p-6 sm:p-10">
+        <div class="flex justify-between items-center mb-6 max-w-4xl mx-auto w-full">
+            <div>
+                <h3 class="text-2xl font-light text-mirror-white flex items-center gap-3">
+                    <i class="fa-solid fa-user-shield text-mirror-danger"></i> Intruder Security Logs
+                </h3>
+                <p class="text-xs text-mirror-dim font-mono mt-1">Automatic snapshots captured during unverified visitor presence</p>
+            </div>
+            <button onclick="closeGalleryModal()" class="text-mirror-dim hover:text-mirror-white text-2xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-w-4xl mx-auto w-full overflow-y-auto max-h-[70vh] p-1">
+            <!-- Snapshots loaded dynamically -->
+        </div>
+    </div>
+
+    <!-- SCRIPT LOGIC -->
+    <script>
+        // --- STATE MANAGEMENT ---
+        let state = {
+            currentTheme: localStorage.getItem('mm_theme') || 'default',
+            currentMode: 'OWNER', // 'OWNER' or 'UNKNOWN'
+            notes: JSON.parse(localStorage.getItem('mm_notes')) || [
+                { id: 1, text: "Prepare presentation slides", dueTime: null, done: false },
+                { id: 2, text: "Drink 2L of water today", dueTime: null, done: true },
+                { id: 3, text: "Pick up dry cleaning", dueTime: null, done: false }
+            ],
+            intruderLogs: JSON.parse(localStorage.getItem('mm_intruder_logs')) || [],
+            isListening: false,
+            voiceState: 'IDLE', // 'IDLE', 'WAITING_FOR_CONTENT', 'WAITING_FOR_TIME'
+            pendingNoteText: '',
+            activeAlarmId: null
+        };
+
+        // --- THEME ENGINE ---
+        function setTheme(themeName) {
+            state.currentTheme = themeName;
+            localStorage.setItem('mm_theme', themeName);
+            
+            if (themeName === 'default') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', themeName);
+            }
+            
+            renderCalendar();
+            renderNotes();
+            if (state.currentMode === 'OWNER') {
+                applyOwnerModeUI();
+            }
+        }
+
+        function toggleSettingsModal() {
+            const modal = document.getElementById('settings-modal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+        }
+
+        // Dynamic Greetings Data
+        const ownerGreetings = [
+            { title: "Good morning, Sarah.", sub: "You look fresh today! Ready to conquer your goals?" },
+            { title: "Welcome back, Sarah.", sub: "You have upcoming notes and tasks waiting for you." },
+            { title: "Looking sharp today!", sub: "Remember to take breaks between your tasks." }
+        ];
+
+        const unknownGreetings = [
+            { title: "Hello visitor.", sub: "System security active. Presence logged." },
+            { title: "Unrecognized Person.", sub: "Please stand by or notify the room owner." }
+        ];
+
+        // --- WEB AUDIO CHIME SOUND ENGINE ---
+        function playReminderChime() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+
+                const now = ctx.currentTime;
+                const osc1 = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc1.type = 'sine';
+                osc2.type = 'triangle';
+
+                osc1.frequency.setValueAtTime(523.25, now); // C5
+                osc1.frequency.exponentialRampToValueAtTime(659.25, now + 0.3); // E5
+                osc1.frequency.exponentialRampToValueAtTime(783.99, now + 0.6); // G5
+
+                osc2.frequency.setValueAtTime(261.63, now); 
+                osc2.frequency.exponentialRampToValueAtTime(329.63, now + 0.6);
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 1.2);
+                osc2.stop(now + 1.2);
+            } catch (err) {
+                console.warn("Audio synthesis unavailable:", err);
+            }
+        }
+
+        // --- SPEECH SYNTHESIS ENGINE (TEXT TO SPEECH) ---
+        function speakText(text, onEndCallback) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // Stop ongoing speech
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.95;
+                utterance.pitch = 1.0;
+                
+                if (onEndCallback) {
+                    utterance.onend = onEndCallback;
+                }
+                
+                window.speechSynthesis.speak(utterance);
+            } else if (onEndCallback) {
+                onEndCallback();
+            }
+        }
+
+        // --- SPEECH RECOGNITION ENGINE ---
+        let recognition = null;
+
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.warn("Speech recognition is not supported in this browser.");
+                document.getElementById('mic-btn').style.display = 'none';
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                state.isListening = true;
+                updateMicUI(true);
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                const liveText = (finalTranscript || interimTranscript).trim();
+                if (liveText) {
+                    updateVoiceTranscriptDisplay(liveText);
+                }
+
+                if (finalTranscript) {
+                    handleVoiceCommand(finalTranscript.toLowerCase());
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.warn("Voice Recognition Error:", event.error);
+                if (event.error === 'not-allowed') {
+                    stopVoiceListening();
+                }
+            };
+
+            recognition.onend = () => {
+                if (state.isListening) {
+                    try { recognition.start(); } catch(e) {}
+                } else {
+                    updateMicUI(false);
+                }
+            };
+        }
+
+        function toggleVoiceListening() {
+            if (state.isListening) {
+                stopVoiceListening();
+            } else {
+                startVoiceListening();
+            }
+        }
+
+        function startVoiceListening() {
+            if (!recognition) initSpeechRecognition();
+            if (recognition) {
+                try {
+                    state.isListening = true;
+                    state.voiceState = 'IDLE';
+                    recognition.start();
+                    showVoiceBar(true, 'Listening... Say "Take a note..."');
+                    speakText("Listening for command.");
+                } catch(e) {
+                    console.log("Recognition already active");
+                }
+            }
+        }
+
+        function stopVoiceListening() {
+            state.isListening = false;
+            state.voiceState = 'IDLE';
+            if (recognition) {
+                try { recognition.stop(); } catch(e) {}
+            }
+            updateMicUI(false);
+            showVoiceBar(false);
+        }
+
+        function updateMicUI(listening) {
+            const btn = document.getElementById('mic-btn');
+            const label = document.getElementById('mic-btn-label');
+            if (listening) {
+                btn.className = "text-xs border border-red-500 text-red-400 px-2.5 py-1 rounded-lg transition voice-pulse flex items-center space-x-1";
+                label.textContent = "Listening";
+            } else {
+                btn.className = "text-xs border theme-border theme-text px-2.5 py-1 rounded-lg transition hover:bg-white/10 flex items-center space-x-1";
+                label.textContent = "Listen";
+            }
+        }
+
+        function showVoiceBar(show, text = "") {
+            const bar = document.getElementById('voice-transcript-bar');
+            const label = document.getElementById('voice-transcript-text');
+            if (show) {
+                bar.classList.remove('hidden');
+                if (text) label.textContent = text;
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        function updateVoiceTranscriptDisplay(text) {
+            showVoiceBar(true, `"${text}"`);
+        }
+
+        // --- VOICE COMMAND PARSER & DIALOGUE ENGINE ---
+        function handleVoiceCommand(transcript) {
+            console.log("Recognized Speech:", transcript);
+
+            // Step 2: User is answering when to set the reminder
+            if (state.voiceState === 'WAITING_FOR_TIME') {
+                const parsedDate = parseSpokenTimeToDate(transcript);
+                if (parsedDate) {
+                    saveVoiceNoteWithSchedule(state.pendingNoteText, parsedDate);
+                    state.voiceState = 'IDLE';
+                    state.pendingNoteText = '';
+                } else {
+                    speakText("I didn't quite get the time. Setting reminder for 5 minutes from now.");
+                    const defaultTime = new Date(Date.now() + 5 * 60000);
+                    saveVoiceNoteWithSchedule(state.pendingNoteText, defaultTime);
+                    state.voiceState = 'IDLE';
+                    state.pendingNoteText = '';
+                }
+                return;
+            }
+
+            // Step 1: Trigger Phrase Check
+            const triggerKeywords = ["take a note", "add note", "remind me to", "set note", "new note"];
+            let triggerFound = false;
+            let noteContent = "";
+
+            for (let kw of triggerKeywords) {
+                if (transcript.includes(kw)) {
+                    triggerFound = true;
+                    noteContent = transcript.split(kw)[1].trim();
+                    break;
+                }
+            }
+
+            if (triggerFound) {
+                if (noteContent.length > 2) {
+                    state.pendingNoteText = noteContent;
+                    promptForReminderTime();
+                } else {
+                    state.voiceState = 'WAITING_FOR_CONTENT';
+                    speakText("What should the note say?", () => {
+                        showVoiceBar(true, "Say your note content...");
+                    });
+                }
+            } else if (state.voiceState === 'WAITING_FOR_CONTENT') {
+                state.pendingNoteText = transcript;
+                promptForReminderTime();
+            }
+        }
+
+        function promptForReminderTime() {
+            state.voiceState = 'WAITING_FOR_TIME';
+            const question = `Got it. When should I remind you to ${state.pendingNoteText}?`;
+            showVoiceBar(true, question);
+            speakText(question);
+        }
+
+        function parseSpokenTimeToDate(spokenTime) {
+            const now = new Date();
+            
+            // "in X minutes"
+            const minMatch = spokenTime.match(/in (\d+)\s*minute/);
+            if (minMatch) {
+                return new Date(now.getTime() + parseInt(minMatch[1]) * 60000);
+            }
+            
+            // "in X hours"
+            const hrMatch = spokenTime.match(/in (\d+)\s*hour/);
+            if (hrMatch) {
+                return new Date(now.getTime() + parseInt(hrMatch[1]) * 3600000);
+            }
+
+            // "tomorrow"
+            if (spokenTime.includes("tomorrow")) {
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                // check for morning/evening
+                if (spokenTime.includes("evening") || spokenTime.includes("pm")) {
+                    tomorrow.setHours(18, 0, 0, 0);
+                } else {
+                    tomorrow.setHours(9, 0, 0, 0);
+                }
+                return tomorrow;
+            }
+
+            // Default fallback: 5 minutes from now if time phrase not clear
+            return null;
+        }
+
+        function saveVoiceNoteWithSchedule(text, dateObj) {
+            const formattedTimeStr = dateObj ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+            const newNote = {
+                id: Date.now(),
+                text: text,
+                dueTime: dateObj ? dateObj.toISOString() : null,
+                done: false
+            };
+
+            state.notes.push(newNote);
+            localStorage.setItem('mm_notes', JSON.stringify(state.notes));
+            renderNotes();
+
+            const confirmMsg = dateObj 
+                ? `Note saved. I will remind you at ${formattedTimeStr}.` 
+                : `Note saved: ${text}.`;
+            
+            showVoiceBar(true, confirmMsg);
+            speakText(confirmMsg, () => {
+                setTimeout(() => showVoiceBar(false), 4000);
+            });
+        }
+
+        // --- AUTOMATED ALARM CHECKER ENGINE ---
+        function startAlarmCheckEngine() {
+            setInterval(() => {
+                const nowIso = new Date().toISOString();
+                
+                state.notes.forEach(note => {
+                    if (note.dueTime && !note.done && note.dueTime <= nowIso) {
+                        triggerAlarm(note);
+                    }
+                });
+            }, 2000);
+        }
+
+        function triggerAlarm(note) {
+            state.activeAlarmId = note.id;
+            
+            // Highlight Modal UI
+            document.getElementById('alarm-note-text').textContent = `"${note.text}"`;
+            const modal = document.getElementById('alarm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            // Sound chime + Voice announcement
+            playReminderChime();
+            setTimeout(() => {
+                speakText(`Reminder from your Magic Mirror: ${note.text}`);
+            }, 600);
+        }
+
+        function dismissAlarm() {
+            if (state.activeAlarmId) {
+                // Mark note as done/triggered
+                state.notes = state.notes.map(n => n.id === state.activeAlarmId ? { ...n, done: true, dueTime: null } : n);
+                localStorage.setItem('mm_notes', JSON.stringify(state.notes));
+                renderNotes();
+                state.activeAlarmId = null;
+            }
+            const modal = document.getElementById('alarm-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            window.speechSynthesis.cancel();
+        }
+
+        // --- CLOCK & CALENDAR ENGINE ---
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            document.getElementById('clock').childNodes[0].nodeValue = `${hours}:${minutes}`;
+            document.getElementById('seconds').textContent = seconds;
+
+            const options = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+            document.getElementById('full-date').textContent = now.toLocaleDateString('en-US', options);
+        }
+
+        function renderCalendar() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            document.getElementById('calendar-month-year').textContent = `${monthNames[month]} ${year}`;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            const calendarDays = document.getElementById('calendar-days');
+            calendarDays.innerHTML = '';
+
+            for (let i = 0; i < firstDay; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'py-1 text-transparent';
+                emptyCell.textContent = '-';
+                calendarDays.appendChild(emptyCell);
+            }
+
+            const today = now.getDate();
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'py-1 rounded-full transition';
+                
+                if (day === today) {
+                    dayCell.className += ' theme-bg-accent text-black font-bold shadow-lg';
+                } else {
+                    dayCell.className += ' text-mirror-dim hover:text-mirror-white';
+                }
+                dayCell.textContent = day;
+                calendarDays.appendChild(dayCell);
+            }
+        }
+
+        // --- WEBCAM & SECURITY ENGINE ---
+        let videoStream = null;
+
+        async function initCamera() {
+            const video = document.getElementById('webcam');
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" } 
+                });
+                video.srcObject = videoStream;
+            } catch (err) {
+                console.warn("Camera permission denied or unavailable:", err);
+            }
+        }
+
+        function captureIntruderSnapshot() {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('snapshot-canvas');
+            const context = canvas.getContext('2d');
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth || 320;
+                canvas.height = video.videoHeight || 240;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const imageData = canvas.toDataURL('image/jpeg');
+                const timestamp = new Date().toLocaleString();
+
+                const newLog = { id: Date.now(), image: imageData, time: timestamp };
+                state.intruderLogs.unshift(newLog);
+
+                if (state.intruderLogs.length > 12) state.intruderLogs.pop();
+                localStorage.setItem('mm_intruder_logs', JSON.stringify(state.intruderLogs));
+                updateLogCounts();
+            }
+        }
+
+        function updateLogCounts() {
+            const count = state.intruderLogs.length;
+            document.getElementById('log-count').textContent = count;
+            document.getElementById('intruder-count-text').textContent = `${count} Intruder Log${count === 1 ? '' : 's'}`;
+        }
+
+        // --- USER RECOGNITION SIMULATOR ---
+        function togglePersonMode() {
+            if (state.currentMode === 'OWNER') {
+                state.currentMode = 'UNKNOWN';
+                applyUnknownModeUI();
+                setTimeout(() => {
+                    captureIntruderSnapshot();
+                }, 800);
+            } else {
+                state.currentMode = 'OWNER';
+                applyOwnerModeUI();
+            }
+        }
+
+        function applyOwnerModeUI() {
+            document.getElementById('mode-toggle-btn').textContent = 'Simulate: Guest';
+            document.getElementById('mode-toggle-btn').className = 'text-xs px-2 py-0.5 rounded border theme-border theme-text hover:bg-white/10 transition font-mono';
+            
+            document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full theme-bg-accent animate-pulse';
+            document.getElementById('recognition-status-text').textContent = 'Owner Identified';
+            
+            const randomGreeting = ownerGreetings[Math.floor(Math.random() * ownerGreetings.length)];
+            document.getElementById('greeting-title').textContent = randomGreeting.title;
+            document.getElementById('greeting-title').className = 'text-3xl sm:text-5xl font-extralight tracking-wide text-mirror-white mirror-glow';
+            
+            document.getElementById('greeting-subtitle').textContent = `"${randomGreeting.sub}"`;
+            document.getElementById('greeting-subtitle').className = 'text-base sm:text-lg theme-glow mt-2 font-light max-w-xl mx-auto';
+
+            document.getElementById('notes-module').classList.remove('opacity-30', 'pointer-events-none');
+        }
+
+        function applyUnknownModeUI() {
+            document.getElementById('mode-toggle-btn').textContent = 'Simulate: Owner';
+            document.getElementById('mode-toggle-btn').className = 'text-xs px-2 py-0.5 rounded border border-mirror-danger text-mirror-danger hover:bg-mirror-danger/10 transition font-mono';
+
+            document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-mirror-danger animate-ping';
+            document.getElementById('recognition-status-text').textContent = 'Unknown Visitor Detected';
+            
+            const randomGreeting = unknownGreetings[Math.floor(Math.random() * unknownGreetings.length)];
+            document.getElementById('greeting-title').textContent = randomGreeting.title;
+            document.getElementById('greeting-title').className = 'text-3xl sm:text-5xl font-extralight tracking-wide text-mirror-danger danger-glow';
+
+            document.getElementById('greeting-subtitle').textContent = `"${randomGreeting.sub}"`;
+            document.getElementById('greeting-subtitle').className = 'text-base sm:text-lg text-mirror-dim mt-2 font-light max-w-xl mx-auto';
+
+            document.getElementById('notes-module').classList.add('opacity-30', 'pointer-events-none');
+        }
+
+        // --- NOTES & REMINDERS MODULE ---
+        function renderNotes() {
+            const list = document.getElementById('notes-list');
+            list.innerHTML = '';
+
+            if (state.notes.length === 0) {
+                list.innerHTML = `<li class="text-xs text-mirror-dim py-2 italic text-center">No active notes or reminders</li>`;
+                return;
+            }
+
+            state.notes.forEach(note => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between p-2 rounded-lg bg-white/5 border border-mirror-border/40 text-xs text-mirror-white group';
+                
+                const timeBadge = note.dueTime 
+                    ? `<span class="text-[10px] font-mono theme-text ml-2"><i class="fa-regular fa-clock mr-1"></i>${new Date(note.dueTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>` 
+                    : '';
+
+                li.innerHTML = `
+                    <div class="flex items-center space-x-2.5 cursor-pointer" onclick="toggleNoteDone(${note.id})">
+                        <i class="fa-${note.done ? 'solid fa-circle-check theme-text' : 'regular fa-circle text-mirror-dim'} text-sm"></i>
+                        <span class="${note.done ? 'line-through text-mirror-dim' : 'text-mirror-white font-light'}">${escapeHtml(note.text)}</span>
+                        ${timeBadge}
+                    </div>
+                    <button onclick="deleteNote(${note.id})" class="text-mirror-dim hover:text-mirror-danger opacity-0 group-hover:opacity-100 transition px-1">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function toggleAddNoteModal() {
+            const modal = document.getElementById('note-modal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+            if (!modal.classList.contains('hidden')) {
+                document.getElementById('note-input').focus();
+            }
+        }
+
+        function saveNote() {
+            const input = document.getElementById('note-input');
+            const timeInput = document.getElementById('note-time-input');
+            const text = input.value.trim();
+            const dueTime = timeInput.value ? new Date(timeInput.value).toISOString() : null;
+
+            if (text) {
+                state.notes.push({ id: Date.now(), text, dueTime, done: false });
+                localStorage.setItem('mm_notes', JSON.stringify(state.notes));
+                renderNotes();
+                input.value = '';
+                timeInput.value = '';
+                toggleAddNoteModal();
+            }
+        }
+
+        function toggleNoteDone(id) {
+            state.notes = state.notes.map(n => n.id === id ? { ...n, done: !n.done } : n);
+            localStorage.setItem('mm_notes', JSON.stringify(state.notes));
+            renderNotes();
+        }
+
+        function deleteNote(id) {
+            state.notes = state.notes.filter(n => n.id !== id);
+            localStorage.setItem('mm_notes', JSON.stringify(state.notes));
+            renderNotes();
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
+
+        // --- INTRUDER LOG GALLERY MODAL ---
+        function openGalleryModal() {
+            const modal = document.getElementById('gallery-modal');
+            const grid = document.getElementById('gallery-grid');
+            grid.innerHTML = '';
+
+            if (state.intruderLogs.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-mirror-dim font-mono text-sm">No security logs recorded yet.</div>`;
+            } else {
+                state.intruderLogs.forEach(log => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-mirror-card border border-mirror-border rounded-xl p-3 flex flex-col space-y-2';
+                    card.innerHTML = `
+                        <img src="${log.image}" alt="Captured Visitor" class="w-full h-40 object-cover rounded-lg border border-mirror-border">
+                        <div class="flex justify-between items-center text-[11px] font-mono text-mirror-dim">
+                            <span>${log.time}</span>
+                            <button onclick="deleteLog(${log.id})" class="text-mirror-danger hover:underline">Delete</button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeGalleryModal() {
+            const modal = document.getElementById('gallery-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function deleteLog(id) {
+            state.intruderLogs = state.intruderLogs.filter(l => l.id !== id);
+            localStorage.setItem('mm_intruder_logs', JSON.stringify(state.intruderLogs));
+            updateLogCounts();
+            openGalleryModal();
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            setTheme(state.currentTheme);
+            updateClock();
+            setInterval(updateClock, 1000);
+            renderCalendar();
+            renderNotes();
+            updateLogCounts();
+            initCamera();
+            initSpeechRecognition();
+            startAlarmCheckEngine();
+        };
+    </script>
+</body>
+</html>
