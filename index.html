@@ -736,6 +736,160 @@
             localStorage.setItem('mm_theme', currentTheme);
             renderCalendar();
         }
+
+        // --- 8. REAL-TIME CLOCK & CALENDAR ENGINE ---
+        function updateClock() {
+            const now = new Date();
+            const clockEl = document.getElementById('clock');
+            const secondsEl = document.getElementById('seconds');
+            const fullDateEl = document.getElementById('full-date');
+
+            if (!clockEl) return;
+
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            clockEl.childNodes[0].textContent = `${hours}:${minutes}`;
+            if (secondsEl) secondsEl.textContent = `:${seconds}`;
+
+            if (fullDateEl) {
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                fullDateEl.textContent = now.toLocaleDateString(undefined, options);
+            }
+
+            // Check scheduled alarms every tick
+            checkAlarms(now);
+        }
+
+        function renderCalendar() {
+            const monthYearEl = document.getElementById('cal-month-year');
+            const gridEl = document.getElementById('cal-days-grid');
+            if (!monthYearEl || !gridEl) return;
+
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const todayDate = now.getDate();
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", 
+                                "July", "August", "September", "October", "November", "December"];
+            monthYearEl.textContent = `${monthNames[month]} ${year}`;
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+
+            let gridHTML = '';
+
+            // Empty padding slots for days before 1st of month
+            for (let i = 0; i < firstDayIndex; i++) {
+                gridHTML += `<div style="opacity: 0.2; padding: 0.25rem;">•</div>`;
+            }
+
+            // Calendar dates
+            for (let day = 1; day <= totalDays; day++) {
+                const isToday = day === todayDate;
+                gridHTML += `
+                    <div style="padding: 0.25rem; border-radius: 4px; ${isToday ? 'background: var(--theme-accent); color: #000; font-weight: bold; box-shadow: 0 0 8px var(--theme-glow);' : 'opacity: 0.9;'}">
+                        ${day}
+                    </div>
+                `;
+            }
+
+            gridEl.innerHTML = gridHTML;
+        }
+
+        // --- 9. AUDIO CHIME & TEXT-TO-SPEECH SYNTHESIS ENGINE ---
+        function playLocalChime(type = 'chime') {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'alarm') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+                    osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
+                    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.5);
+                } else {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                    osc.frequency.exponentialRampToValueAtTime(659.25, audioCtx.currentTime + 0.3); // E5
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.3);
+                }
+            } catch (e) {
+                console.log('Local audio initialization pending user interaction.');
+            }
+        }
+
+        function speakText(phrase) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(phrase);
+                utterance.rate = 0.95;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // --- 10. LOCAL HTML5 WEBCAM MOTION LOGGING ENGINE ---
+        function initLocalWebcam() {
+            const video = document.getElementById('webcam-feed');
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+                    .then(stream => {
+                        video.srcObject = stream;
+                    })
+                    .catch(err => {
+                        console.log("Local camera stream unavailable or permission denied.");
+                    });
+            }
+        }
+
+        function captureVisitorSnapshot() {
+            const video = document.getElementById('webcam-feed');
+            const canvas = document.getElementById('snap-canvas');
+            const ctx = canvas.getContext('2d');
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                const now = new Date();
+                const timestamp = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} - ${now.getMonth()+1}/${now.getDate()}`;
+                
+                visitorLogs.unshift({ image: dataUrl, timestamp: timestamp });
+                if (visitorLogs.length > 10) visitorLogs.pop(); // keep last 10
+                localStorage.setItem('mm_visitor_logs', JSON.stringify(visitorLogs));
+                renderVisitorLogs();
+            }
+        }
+
+        // --- 11. INITIALIZATION & LIFECYCLE HOOKS ---
+        window.addEventListener('DOMContentLoaded', () => {
+            // Immediate Initial Render
+            updateClock();
+            renderCalendar();
+            updateGreeting();
+            renderNotes();
+            initLocalWebcam();
+
+            // Set Clock Ticker (1 Second Loop)
+            setInterval(updateClock, 1000);
+        });
     </script>
 </body>
 </html>
