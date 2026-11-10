@@ -189,6 +189,7 @@
         <div class="flex flex-col items-end">
             <div class="flex items-center gap-2" style="margin-bottom: 0.5rem;">
                 <button onclick="toggleVoiceListening()" id="mic-btn" class="btn-glass" title="Voice Input">🎙️ Voice Note</button>
+                <button onclick="toggleTimeFormat()" id="time-format-btn" class="btn-glass" title="Toggle 12h/24h Format">🕒 12H</button>
                 <button onclick="openUserModal()" class="btn-glass" title="Profiles">👥 Profiles</button>
                 <button onclick="openThemeModal()" class="btn-glass" title="Theme">🎨 Theme</button>
             </div>
@@ -340,6 +341,7 @@
     <script>
         // --- 1. LOCAL STATE & STORAGE ENGINE ---
         let currentTheme = localStorage.getItem('mm_theme') || 'cyan';
+        let is24HourFormat = localStorage.getItem('mm_time_format') === '24h';
         let users = JSON.parse(localStorage.getItem('mm_users')) || [
             { id: 1, name: 'Owner', dob: '2000-01-01', greeting: 'You look fresh today!', photo: null }
         ];
@@ -354,6 +356,21 @@
 
         // Apply Theme Globally
         document.documentElement.setAttribute('data-theme', currentTheme);
+
+        // --- TIME FORMAT TOGGLE ---
+        function toggleTimeFormat() {
+            is24HourFormat = !is24HourFormat;
+            localStorage.setItem('mm_time_format', is24HourFormat ? '24h' : '12h');
+            updateTimeFormatBtn();
+            updateClock();
+        }
+
+        function updateTimeFormatBtn() {
+            const btn = document.getElementById('time-format-btn');
+            if (btn) {
+                btn.textContent = is24HourFormat ? '🕒 24H' : '🕒 12H';
+            }
+        }
 
         // --- PROFILE PHOTO HANDLING ---
         function handlePhotoUpload(event) {
@@ -746,12 +763,21 @@
 
             if (!clockEl) return;
 
-            const hours = String(now.getHours()).padStart(2, '0');
+            let hours = now.getHours();
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
+            let ampmStr = '';
 
-            clockEl.childNodes[0].textContent = `${hours}:${minutes}`;
-            if (secondsEl) secondsEl.textContent = `:${seconds}`;
+            if (!is24HourFormat) {
+                ampmStr = hours >= 12 ? ' PM' : ' AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // convert '0' to '12'
+            }
+
+            const formattedHours = String(hours).padStart(2, '0');
+
+            clockEl.childNodes[0].textContent = `${formattedHours}:${minutes}`;
+            if (secondsEl) secondsEl.textContent = `:${seconds}${ampmStr}`;
 
             if (fullDateEl) {
                 const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -881,6 +907,7 @@
         // --- 11. INITIALIZATION & LIFECYCLE HOOKS ---
         window.addEventListener('DOMContentLoaded', () => {
             // Immediate Initial Render
+            updateTimeFormatBtn();
             updateClock();
             renderCalendar();
             updateGreeting();
