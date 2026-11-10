@@ -122,6 +122,33 @@
             to { border-color: rgba(255, 215, 0, 1); }
         }
 
+        /* Modal Popup Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-glass {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--theme-border);
+            color: #fff;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            width: 100%;
+            outline: none;
+            margin-top: 0.25rem;
+        }
+        .input-glass:focus {
+            border-color: var(--theme-accent);
+            box-shadow: 0 0 8px var(--theme-glow);
+        }
+
         /* Scrollbars */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.8); }
@@ -204,7 +231,7 @@
         <div id="notes-container" class="glass-panel flex flex-col justify-between" style="height: 180px;">
             <div class="flex justify-between items-center" style="margin-bottom: 0.5rem;">
                 <span class="theme-glow" style="font-weight: 600;">📌 Tasks & Reminders</span>
-                <button onclick="addManualNotePrompt()" class="btn-glass" style="font-size: 0.75rem;">+ Add Note</button>
+                <button onclick="openNoteModal()" class="btn-glass" style="font-size: 0.75rem;">+ Add Note</button>
             </div>
             <div id="notes-list" style="overflow-y: auto; max-height: 120px; font-size: 0.85rem;" class="flex flex-col gap-2">
                 <!-- Notes rendering -->
@@ -222,6 +249,67 @@
             </div>
         </div>
     </footer>
+
+    <!-- MODAL: User Registration & Profile Switcher -->
+    <div id="user-modal" class="modal-overlay hidden">
+        <div class="glass-panel" style="width: 90%; max-width: 480px;">
+            <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
+                <span class="theme-glow" style="font-size: 1.2rem; font-weight: 700;">👥 User Profiles</span>
+                <button onclick="closeUserModal()" class="btn-glass" style="padding: 0.2rem 0.6rem;">✕</button>
+            </div>
+            
+            <!-- Existing Profiles List -->
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 0.5rem;">Switch Active User:</div>
+                <div id="user-profile-list" class="flex flex-col gap-2" style="max-height: 120px; overflow-y: auto;">
+                    <!-- Profiles dynamically rendered -->
+                </div>
+            </div>
+
+            <!-- New User Registration Form -->
+            <div style="border-top: 1px solid var(--theme-border); padding-top: 1rem;">
+                <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem;" class="theme-glow">+ Register New User</div>
+                <div class="flex flex-col gap-2">
+                    <div>
+                        <label style="font-size: 0.75rem; opacity: 0.8;">Full Name</label>
+                        <input type="text" id="reg-name" class="input-glass" placeholder="e.g. Sarah">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label style="font-size: 0.75rem; opacity: 0.8;">Date of Birth</label>
+                            <input type="date" id="reg-dob" class="input-glass">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; opacity: 0.8;">Custom Greeting</label>
+                            <input type="text" id="reg-greeting" class="input-glass" placeholder="You look fresh today!">
+                        </div>
+                    </div>
+                    <button onclick="saveNewUserProfile()" class="btn-glass" style="margin-top: 0.5rem; width: 100%;">Create Profile</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Manual Add Note -->
+    <div id="note-modal" class="modal-overlay hidden">
+        <div class="glass-panel" style="width: 90%; max-width: 400px;">
+            <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
+                <span class="theme-glow" style="font-size: 1.1rem; font-weight: 700;">📌 Add Note / Reminder</span>
+                <button onclick="closeNoteModal()" class="btn-glass" style="padding: 0.2rem 0.6rem;">✕</button>
+            </div>
+            <div class="flex flex-col gap-3">
+                <div>
+                    <label style="font-size: 0.75rem; opacity: 0.8;">Reminder Text</label>
+                    <input type="text" id="note-text-input" class="input-glass" placeholder="e.g., Take morning vitamins">
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; opacity: 0.8;">Reminder Time (Optional)</label>
+                    <input type="time" id="note-time-input" class="input-glass">
+                </div>
+                <button onclick="saveManualNote()" class="btn-glass" style="margin-top: 0.5rem; width: 100%;">Save Reminder</button>
+            </div>
+        </div>
+    </div>
 
     <!-- LOCAL OFFLINE APPLICATION LOGIC -->
     <script>
@@ -288,10 +376,16 @@
             const mins = String(now.getMinutes()).padStart(2, '0');
             const secs = String(now.getSeconds()).padStart(2, '0');
             
-            document.getElementById('clock').innerHTML = `${hrs}:${mins}<span id="seconds" style="font-size: 2rem; opacity: 0.8;">:${secs}</span>`;
+            const clockEl = document.getElementById('clock');
+            if (clockEl) {
+                clockEl.innerHTML = `${hrs}:${mins}<span id="seconds" style="font-size: 2rem; opacity: 0.8;">:${secs}</span>`;
+            }
             
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            document.getElementById('full-date').textContent = now.toLocaleDateString(undefined, options);
+            const dateEl = document.getElementById('full-date');
+            if (dateEl) {
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                dateEl.textContent = now.toLocaleDateString(undefined, options);
+            }
 
             checkAlarms(now);
         }
@@ -327,7 +421,7 @@
         }
         renderCalendar();
 
-        // --- 4. USER & BIRTHDAY MANAGEMENT ---
+        // --- 4. USER PROFILE MANAGEMENT ENGINE ---
         function updateGreeting() {
             const activeUser = users.find(u => u.id === activeUserId) || users[0];
             const greetingEl = document.getElementById('mirror-greeting');
@@ -356,6 +450,85 @@
             }
         }
         updateGreeting();
+
+        function openUserModal() {
+            renderUserProfilesList();
+            document.getElementById('user-modal').classList.remove('hidden');
+        }
+
+        function closeUserModal() {
+            document.getElementById('user-modal').classList.add('hidden');
+        }
+
+        function renderUserProfilesList() {
+            const list = document.getElementById('user-profile-list');
+            list.innerHTML = users.map(u => {
+                const isActive = u.id === activeUserId;
+                return `
+                    <div class="flex justify-between items-center" style="background: ${isActive ? 'var(--theme-accent)' : 'rgba(255,255,255,0.05)'}; color: ${isActive ? '#000' : '#fff'}; padding: 0.5rem; border-radius: 6px;">
+                        <span style="font-weight: ${isActive ? 'bold' : 'normal'};">👤 ${u.name} ${u.dob ? `(${u.dob})` : ''}</span>
+                        <div class="flex gap-2">
+                            ${!isActive ? `<button onclick="switchActiveUser(${u.id})" class="btn-glass" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">Select</button>` : `<span style="font-size: 0.75rem;">Active</span>`}
+                            ${users.length > 1 ? `<button onclick="deleteUserProfile(${u.id})" style="background:none; border:none; color:${isActive ? '#000' : '#FF453A'}; cursor:pointer;">✕</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function switchActiveUser(userId) {
+            activeUserId = userId;
+            localStorage.setItem('mm_active_user', activeUserId);
+            updateGreeting();
+            renderNotes();
+            renderUserProfilesList();
+            closeUserModal();
+        }
+
+        function saveNewUserProfile() {
+            const nameInput = document.getElementById('reg-name');
+            const dobInput = document.getElementById('reg-dob');
+            const greetingInput = document.getElementById('reg-greeting');
+
+            const name = nameInput.value.trim();
+            if (!name) {
+                speakText("Please enter a valid user profile name.");
+                return;
+            }
+
+            const newUser = {
+                id: Date.now(),
+                name: name,
+                dob: dobInput.value,
+                greeting: greetingInput.value.trim() || 'You look wonderful today.'
+            };
+
+            users.push(newUser);
+            activeUserId = newUser.id;
+            localStorage.setItem('mm_users', JSON.stringify(users));
+            localStorage.setItem('mm_active_user', activeUserId);
+
+            // Clear inputs
+            nameInput.value = '';
+            dobInput.value = '';
+            greetingInput.value = '';
+
+            updateGreeting();
+            renderNotes();
+            closeUserModal();
+            speakText(`Welcome ${newUser.name}. Profile created successfully.`);
+        }
+
+        function deleteUserProfile(userId) {
+            if (users.length <= 1) return;
+            users = users.filter(u => u.id !== userId);
+            if (activeUserId === userId) activeUserId = users[0].id;
+            localStorage.setItem('mm_users', JSON.stringify(users));
+            localStorage.setItem('mm_active_user', activeUserId);
+            updateGreeting();
+            renderNotes();
+            renderUserProfilesList();
+        }
 
         // --- 5. LOCAL MOTION & CAMERA ENGINE ---
         async function initOfflineCamera() {
@@ -427,7 +600,7 @@
             renderVisitorLogs();
         }
 
-        // --- 6. OFFLINE VOICE SPEECH ENGINE ---
+        // --- 6. ENHANCED VOICE RECOGNITION & SPEECH PARSER ---
         function initVoiceRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) return;
@@ -439,7 +612,7 @@
             recognition.onstart = () => {
                 isListening = true;
                 document.getElementById('voice-transcript-box').classList.remove('hidden');
-                document.getElementById('voice-transcript').textContent = 'Listening... Speak your note.';
+                document.getElementById('voice-transcript').textContent = 'Listening... Speak your note or reminder.';
             };
 
             recognition.onresult = (event) => {
@@ -449,7 +622,7 @@
                 document.getElementById('voice-transcript').textContent = `"${transcript}"`;
                 
                 if (event.results[0].isFinal) {
-                    processVoiceNote(transcript);
+                    processVoiceCommand(transcript);
                 }
             };
 
@@ -464,7 +637,7 @@
 
         function toggleVoiceListening() {
             if (!recognition) {
-                alert("Speech recognition is not supported natively in this browser.");
+                speakText("Voice recognition is not supported in this browser.");
                 return;
             }
             if (isListening) {
@@ -474,19 +647,46 @@
             }
         }
 
-        function processVoiceNote(text) {
+        function processVoiceCommand(rawText) {
+            const text = rawText.trim();
+            if (!text) return;
+
+            // Simple time parser (e.g. "at 5 PM", "at 14:30", "in 5 minutes")
+            let scheduledTimeStr = null;
+            let noteContent = text;
+
+            // Pattern 1: "... at 5:30" or "... at 5 PM"
+            const timeAtMatch = text.match(/(?:at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+            if (timeAtMatch) {
+                let hours = parseInt(timeAtMatch[1], 10);
+                const minutes = timeAtMatch[2] ? parseInt(timeAtMatch[2], 10) : 0;
+                const ampm = timeAtMatch[3] ? timeAtMatch[3].toLowerCase() : null;
+
+                if (ampm === 'pm' && hours < 12) hours += 12;
+                if (ampm === 'am' && hours === 12) hours = 0;
+
+                scheduledTimeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                noteContent = text.replace(timeAtMatch[0], '').trim();
+            }
+
+            // Save parsed voice note
             const newNote = {
                 id: Date.now(),
                 userId: activeUserId,
-                text: text,
-                time: "Today",
+                text: noteContent || text,
+                time: scheduledTimeStr || "Anytime",
                 triggered: false
             };
+
             notes.push(newNote);
             localStorage.setItem('mm_notes', JSON.stringify(notes));
             renderNotes();
             playLocalChime('chime');
-            speakText(`Note saved: ${text}`);
+
+            const confirmMsg = scheduledTimeStr 
+                ? `Reminder set for ${scheduledTimeStr}: ${newNote.text}`
+                : `Note recorded: ${newNote.text}`;
+            speakText(confirmMsg);
         }
 
         // --- 7. TASKS & ALARMS ENGINE ---
@@ -501,18 +701,47 @@
 
             list.innerHTML = userNotes.map(n => `
                 <div class="flex justify-between items-center" style="background: rgba(255,255,255,0.05); padding: 0.4rem; border-radius: 6px;">
-                    <span>• ${n.text}</span>
+                    <div>
+                        <span>• ${n.text}</span>
+                        ${n.time !== 'Anytime' ? `<span style="font-size:0.75rem; color:var(--theme-accent); margin-left:0.5rem;">⏰ ${n.time}</span>` : ''}
+                    </div>
                     <button onclick="deleteNote(${n.id})" style="background:none; border:none; color:#FF453A; cursor:pointer;">✕</button>
                 </div>
             `).join('');
         }
         renderNotes();
 
-        function addManualNotePrompt() {
-            const text = prompt("Enter note/reminder text:");
-            if (text) {
-                processVoiceNote(text);
-            }
+        function openNoteModal() {
+            document.getElementById('note-modal').classList.remove('hidden');
+        }
+
+        function closeNoteModal() {
+            document.getElementById('note-modal').classList.add('hidden');
+        }
+
+        function saveManualNote() {
+            const textInput = document.getElementById('note-text-input');
+            const timeInput = document.getElementById('note-time-input');
+
+            const text = textInput.value.trim();
+            if (!text) return;
+
+            const newNote = {
+                id: Date.now(),
+                userId: activeUserId,
+                text: text,
+                time: timeInput.value || "Anytime",
+                triggered: false
+            };
+
+            notes.push(newNote);
+            localStorage.setItem('mm_notes', JSON.stringify(notes));
+            renderNotes();
+
+            textInput.value = '';
+            timeInput.value = '';
+            closeNoteModal();
+            playLocalChime('chime');
         }
 
         function deleteNote(id) {
@@ -522,7 +751,16 @@
         }
 
         function checkAlarms(now) {
-            // Alarm trigger logic when scheduled time arrives
+            const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
+            notes.forEach(note => {
+                if (note.userId === activeUserId && note.time === currentHHMM && !note.triggered) {
+                    note.triggered = true;
+                    localStorage.setItem('mm_notes', JSON.stringify(notes));
+                    playLocalChime('alarm');
+                    speakText(`Reminder for active user: ${note.text}`);
+                }
+            });
         }
 
         // Theme Switcher Logic
@@ -533,19 +771,6 @@
             document.documentElement.setAttribute('data-theme', currentTheme);
             localStorage.setItem('mm_theme', currentTheme);
             renderCalendar();
-        }
-
-        function openUserModal() {
-            const name = prompt("Enter profile name:", "User");
-            if (name) {
-                const newUser = { id: Date.now(), name: name, dob: '', greeting: 'Good day!' };
-                users.push(newUser);
-                activeUserId = newUser.id;
-                localStorage.setItem('mm_users', JSON.stringify(users));
-                localStorage.setItem('mm_active_user', activeUserId);
-                updateGreeting();
-                renderNotes();
-            }
         }
     </script>
 </body>
