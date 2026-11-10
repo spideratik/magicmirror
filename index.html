@@ -169,8 +169,15 @@
             </div>
             <div id="greeting-box" class="glass-panel" style="margin-top: 1rem; width: 100%;">
                 <div class="flex items-center gap-2">
-                    <span id="user-avatar" style="font-size: 1.5rem;">👤</span>
-                    <span id="mirror-greeting" class="theme-glow" style="font-size: 1.15rem; font-weight: 600;">Welcome!</span>
+                    <!-- Updated Profile Photo Avatar Container -->
+                    <div id="user-avatar-box" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--theme-accent); overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1);">
+                        <img id="user-avatar-img" src="" class="hidden" style="width: 100%; height: 100%; object-fit: cover;">
+                        <span id="user-avatar-emoji" style="font-size: 1.5rem;">👤</span>
+                    </div>
+                    <div>
+                        <span id="mirror-greeting" class="theme-glow" style="font-size: 1.15rem; font-weight: 600;">Welcome!</span>
+                        <div id="face-match-status" style="font-size: 0.7rem; opacity: 0.7;">Face Match: Active</div>
+                    </div>
                 </div>
                 <div id="bday-banner" class="birthday-glow hidden" style="margin-top: 0.5rem; padding: 0.5rem; border-radius: 8px; text-align: center;">
                     <span style="font-size: 1.2rem;">🎂 Happy Birthday! 🎉</span>
@@ -220,8 +227,11 @@
         <!-- Detection Status Overlay -->
         <div class="glass-panel flex items-center gap-4">
             <span id="visitor-status-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #00FF87;"></span>
-            <span id="visitor-status-text" class="mirror-glow" style="font-size: 0.9rem;">Mode: Owner Identified</span>
-            <button onclick="toggleVisitorModeSim()" class="btn-glass" style="font-size: 0.75rem;">Simulate Visitor</button>
+            <span id="visitor-status-text" class="mirror-glow" style="font-size: 0.9rem;">Face Match: Owner Identified</span>
+            <div class="flex gap-2">
+                <button onclick="simulateFaceScan(true)" class="btn-glass" style="font-size: 0.75rem;">Simulate Owner</button>
+                <button onclick="simulateFaceScan(false)" class="btn-glass" style="font-size: 0.75rem;">Simulate Unknown</button>
+            </div>
         </div>
     </main>
 
@@ -284,6 +294,21 @@
                             <input type="text" id="reg-greeting" class="input-glass" placeholder="You look fresh today!">
                         </div>
                     </div>
+
+                    <!-- Profile Photo Selection / Camera Snap -->
+                    <div>
+                        <label style="font-size: 0.75rem; opacity: 0.8;">Profile Face Photo</label>
+                        <div class="flex gap-2 items-center" style="margin-top: 0.25rem;">
+                            <input type="file" id="reg-photo-file" accept="image/*" class="hidden" onchange="handlePhotoUpload(event)">
+                            <button type="button" onclick="document.getElementById('reg-photo-file').click()" class="btn-glass" style="font-size: 0.75rem; flex-grow: 1;">📁 Choose File</button>
+                            <button type="button" onclick="snapProfilePhotoFromCam()" class="btn-glass" style="font-size: 0.75rem; flex-grow: 1;">📸 Snap Cam</button>
+                        </div>
+                        <div id="reg-photo-preview-container" class="hidden flex items-center gap-2" style="margin-top: 0.5rem;">
+                            <img id="reg-photo-preview" src="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--theme-accent);">
+                            <span style="font-size: 0.75rem; color: var(--theme-accent);">Face Photo Loaded</span>
+                        </div>
+                    </div>
+
                     <button onclick="saveNewUserProfile()" class="btn-glass" style="margin-top: 0.5rem; width: 100%;">Create Profile</button>
                 </div>
             </div>
@@ -316,7 +341,7 @@
         // --- 1. LOCAL STATE & STORAGE ENGINE ---
         let currentTheme = localStorage.getItem('mm_theme') || 'cyan';
         let users = JSON.parse(localStorage.getItem('mm_users')) || [
-            { id: 1, name: 'Owner', dob: '2000-01-01', greeting: 'You look fresh today!' }
+            { id: 1, name: 'Owner', dob: '2000-01-01', greeting: 'You look fresh today!', photo: null }
         ];
         let activeUserId = parseInt(localStorage.getItem('mm_active_user')) || 1;
         let notes = JSON.parse(localStorage.getItem('mm_notes')) || [];
@@ -325,119 +350,80 @@
         let isListening = false;
         let recognition = null;
         let audioCtx = null;
+        let tempRegisterPhotoData = null;
 
         // Apply Theme Globally
         document.documentElement.setAttribute('data-theme', currentTheme);
 
-        // --- 2. LOCAL AUDIO SYNTHESIZER (No External Sounds Required) ---
-        function playLocalChime(type = 'chime') {
-            try {
-                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
+        // --- PROFILE PHOTO HANDLING ---
+        function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                tempRegisterPhotoData = e.target.result;
+                document.getElementById('reg-photo-preview').src = tempRegisterPhotoData;
+                document.getElementById('reg-photo-preview-container').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
 
-                if (type === 'chime') {
-                    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
-                    osc.frequency.exponentialRampToValueAtTime(659.25, audioCtx.currentTime + 0.3); // E5
-                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 0.6);
-                } else if (type === 'alarm') {
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
-                    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 0.5);
-                }
-            } catch(e) {
-                console.log("Audio synthesis blocked or unsupported.");
+        function snapProfilePhotoFromCam() {
+            const video = document.getElementById('webcam-feed');
+            const canvas = document.getElementById('snap-canvas');
+            const ctx = canvas.getContext('2d');
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                tempRegisterPhotoData = canvas.toDataURL('image/jpeg', 0.8);
+                document.getElementById('reg-photo-preview').src = tempRegisterPhotoData;
+                document.getElementById('reg-photo-preview-container').classList.remove('hidden');
+                speakText("Profile photo captured!");
+            } else {
+                speakText("Camera not ready. Please enable camera permission.");
             }
         }
 
-        // Offline Text-to-Speech Engine
-        function speakText(text) {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = 0.95;
-                utterance.pitch = 1.0;
-                window.speechSynthesis.speak(utterance);
-            }
-        }
-
-        // --- 3. CLOCK & CALENDAR ENGINE ---
-        function updateClock() {
-            const now = new Date();
-            const hrs = String(now.getHours()).padStart(2, '0');
-            const mins = String(now.getMinutes()).padStart(2, '0');
-            const secs = String(now.getSeconds()).padStart(2, '0');
-            
-            const clockEl = document.getElementById('clock');
-            if (clockEl) {
-                clockEl.innerHTML = `${hrs}:${mins}<span id="seconds" style="font-size: 2rem; opacity: 0.8;">:${secs}</span>`;
-            }
-            
-            const dateEl = document.getElementById('full-date');
-            if (dateEl) {
-                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                dateEl.textContent = now.toLocaleDateString(undefined, options);
-            }
-
-            checkAlarms(now);
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
-
-        function renderCalendar() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const today = now.getDate();
-
-            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-            document.getElementById('cal-month-year').textContent = `${monthNames[month]} ${year}`;
-
-            const firstDay = new Date(year, month, 1).getDay();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-            const grid = document.getElementById('cal-days-grid');
-            grid.innerHTML = '';
-
-            for (let i = 0; i < firstDay; i++) {
-                grid.innerHTML += `<div></div>`;
-            }
-
-            for (let day = 1; day <= daysInMonth; day++) {
-                const isToday = day === today;
-                const style = isToday 
-                    ? `background: var(--theme-accent); color: #000; font-weight: bold; border-radius: 50%; box-shadow: 0 0 8px var(--theme-glow);` 
-                    : `opacity: 0.8;`;
-                grid.innerHTML += `<div style="padding: 2px; ${style}">${day}</div>`;
-            }
-        }
-        renderCalendar();
-
-        // --- 4. USER PROFILE MANAGEMENT ENGINE ---
+        // --- USER PROFILE MANAGEMENT ENGINE ---
         function updateGreeting() {
             const activeUser = users.find(u => u.id === activeUserId) || users[0];
             const greetingEl = document.getElementById('mirror-greeting');
             const bdayBanner = document.getElementById('bday-banner');
+            const avatarImg = document.getElementById('user-avatar-img');
+            const avatarEmoji = document.getElementById('user-avatar-emoji');
+            const statusText = document.getElementById('face-match-status');
 
             if (isUnknownVisitor) {
                 greetingEl.textContent = "Security Notice: Unknown Visitor Detected";
                 greetingEl.className = "danger-glow";
                 bdayBanner.classList.add('hidden');
                 document.getElementById('notes-container').style.opacity = '0.2';
+                
+                avatarImg.classList.add('hidden');
+                avatarEmoji.classList.remove('hidden');
+                avatarEmoji.textContent = '❓';
+                statusText.textContent = "Face Match: Unregistered Visitor";
+                statusText.style.color = "#FF453A";
                 return;
             }
 
             document.getElementById('notes-container').style.opacity = '1';
             greetingEl.className = "theme-glow";
             greetingEl.textContent = `Hello, ${activeUser.name}! ${activeUser.greeting || 'You look great today.'}`;
+
+            // Update Avatar Display
+            if (activeUser.photo) {
+                avatarImg.src = activeUser.photo;
+                avatarImg.classList.remove('hidden');
+                avatarEmoji.classList.add('hidden');
+            } else {
+                avatarImg.classList.add('hidden');
+                avatarEmoji.classList.remove('hidden');
+                avatarEmoji.textContent = '👤';
+            }
+
+            statusText.textContent = `Face Match: ${activeUser.name} Verified`;
+            statusText.style.color = "var(--theme-accent)";
 
             // Check Birthday (MM-DD)
             const today = new Date();
@@ -449,16 +435,6 @@
                 bdayBanner.classList.add('hidden');
             }
         }
-        updateGreeting();
-
-        function openUserModal() {
-            renderUserProfilesList();
-            document.getElementById('user-modal').classList.remove('hidden');
-        }
-
-        function closeUserModal() {
-            document.getElementById('user-modal').classList.add('hidden');
-        }
 
         function renderUserProfilesList() {
             const list = document.getElementById('user-profile-list');
@@ -466,7 +442,10 @@
                 const isActive = u.id === activeUserId;
                 return `
                     <div class="flex justify-between items-center" style="background: ${isActive ? 'var(--theme-accent)' : 'rgba(255,255,255,0.05)'}; color: ${isActive ? '#000' : '#fff'}; padding: 0.5rem; border-radius: 6px;">
-                        <span style="font-weight: ${isActive ? 'bold' : 'normal'};">👤 ${u.name} ${u.dob ? `(${u.dob})` : ''}</span>
+                        <div class="flex items-center gap-2">
+                            ${u.photo ? `<img src="${u.photo}" style="width:28px; height:28px; border-radius:50%; object-fit:cover;">` : `<span>👤</span>`}
+                            <span style="font-weight: ${isActive ? 'bold' : 'normal'};">${u.name} ${u.dob ? `(${u.dob})` : ''}</span>
+                        </div>
                         <div class="flex gap-2">
                             ${!isActive ? `<button onclick="switchActiveUser(${u.id})" class="btn-glass" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">Select</button>` : `<span style="font-size: 0.75rem;">Active</span>`}
                             ${users.length > 1 ? `<button onclick="deleteUserProfile(${u.id})" style="background:none; border:none; color:${isActive ? '#000' : '#FF453A'}; cursor:pointer;">✕</button>` : ''}
@@ -474,15 +453,6 @@
                     </div>
                 `;
             }).join('');
-        }
-
-        function switchActiveUser(userId) {
-            activeUserId = userId;
-            localStorage.setItem('mm_active_user', activeUserId);
-            updateGreeting();
-            renderNotes();
-            renderUserProfilesList();
-            closeUserModal();
         }
 
         function saveNewUserProfile() {
@@ -500,7 +470,8 @@
                 id: Date.now(),
                 name: name,
                 dob: dobInput.value,
-                greeting: greetingInput.value.trim() || 'You look wonderful today.'
+                greeting: greetingInput.value.trim() || 'You look wonderful today.',
+                photo: tempRegisterPhotoData || null
             };
 
             users.push(newUser);
@@ -512,69 +483,31 @@
             nameInput.value = '';
             dobInput.value = '';
             greetingInput.value = '';
+            tempRegisterPhotoData = null;
+            document.getElementById('reg-photo-preview-container').classList.add('hidden');
 
             updateGreeting();
             renderNotes();
             closeUserModal();
-            speakText(`Welcome ${newUser.name}. Profile created successfully.`);
+            speakText(`Welcome ${newUser.name}. Face profile registered successfully.`);
         }
 
-        function deleteUserProfile(userId) {
-            if (users.length <= 1) return;
-            users = users.filter(u => u.id !== userId);
-            if (activeUserId === userId) activeUserId = users[0].id;
-            localStorage.setItem('mm_users', JSON.stringify(users));
-            localStorage.setItem('mm_active_user', activeUserId);
-            updateGreeting();
-            renderNotes();
-            renderUserProfilesList();
-        }
-
-        // --- 5. LOCAL MOTION & CAMERA ENGINE ---
-        async function initOfflineCamera() {
-            try {
-                const video = document.getElementById('webcam-feed');
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                video.srcObject = stream;
-            } catch(err) {
-                console.log("Local camera unavailable or permission denied.");
-            }
-        }
-        initOfflineCamera();
-
-        function captureVisitorSnapshot() {
-            const video = document.getElementById('webcam-feed');
-            const canvas = document.getElementById('snap-canvas');
-            const ctx = canvas.getContext('2d');
-
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                
-                const newLog = {
-                    id: Date.now(),
-                    timestamp: new Date().toLocaleTimeString(),
-                    image: dataUrl
-                };
-                visitorLogs.unshift(newLog);
-                localStorage.setItem('mm_visitor_logs', JSON.stringify(visitorLogs));
-                renderVisitorLogs();
-                playLocalChime('alarm');
-            }
-        }
-
-        function toggleVisitorModeSim() {
-            isUnknownVisitor = !isUnknownVisitor;
+        // --- FACE MATCHING SIMULATION & AUTOMATED LOGGING ---
+        function simulateFaceScan(isRecognizedOwner = true) {
             const dot = document.getElementById('visitor-status-dot');
             const text = document.getElementById('visitor-status-text');
 
-            if (isUnknownVisitor) {
-                dot.style.background = '#FF453A';
-                text.textContent = 'Mode: Unknown Visitor Detected';
-                captureVisitorSnapshot();
-            } else {
+            if (isRecognizedOwner) {
+                isUnknownVisitor = false;
                 dot.style.background = '#00FF87';
-                text.textContent = 'Mode: Owner Identified';
+                text.textContent = 'Face Match: Recognized Owner';
+                speakText(`Welcome back ${users.find(u => u.id === activeUserId)?.name || 'Owner'}`);
+            } else {
+                isUnknownVisitor = true;
+                dot.style.background = '#FF453A';
+                text.textContent = 'Alert: Unrecognized Person';
+                captureVisitorSnapshot();
+                speakText("Unknown visitor detected. Snapshot recorded.");
             }
             updateGreeting();
         }
@@ -742,6 +675,37 @@
             timeInput.value = '';
             closeNoteModal();
             playLocalChime('chime');
+        }
+
+        // --- USER MODAL CONTROLS ---
+        function openUserModal() {
+            renderUserProfilesList();
+            document.getElementById('user-modal').classList.remove('hidden');
+        }
+
+        function closeUserModal() {
+            document.getElementById('user-modal').classList.add('hidden');
+        }
+
+        function switchActiveUser(id) {
+            activeUserId = id;
+            localStorage.setItem('mm_active_user', activeUserId);
+            updateGreeting();
+            renderNotes();
+            renderUserProfilesList();
+        }
+
+        function deleteUserProfile(id) {
+            if (users.length <= 1) return;
+            users = users.filter(u => u.id !== id);
+            if (activeUserId === id) {
+                activeUserId = users[0].id;
+                localStorage.setItem('mm_active_user', activeUserId);
+            }
+            localStorage.setItem('mm_users', JSON.stringify(users));
+            updateGreeting();
+            renderNotes();
+            renderUserProfilesList();
         }
 
         function deleteNote(id) {
