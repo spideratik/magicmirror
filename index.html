@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Magic Mirror - Offline Edition</title>
+    
+    <!-- Self-Contained Local Mirror Styling (No External Dependencies) -->
+    <style>
+        :root {
+            /* Default OLED Cyan Theme */
+            --theme-accent: #64FFDA;
+            --theme-glow: rgba(100, 255, 218, 0.7);
+            --theme-border: rgba(100, 255, 218, 0.3);
+            --theme-text-accent: #64FFDA;
+            --bg-glass: rgba(15, 23, 42, 0.6);
+        }
+
+        /* Theme Variants */
+        [data-theme="golden"] {
+            --theme-accent: #FFD700;
+            --theme-glow: rgba(255, 215, 0, 0.8);
+            --theme-border: rgba(255, 215, 0, 0.35);
+            --theme-text-accent: #FFD700;
+        }
+
+        [data-theme="pink"] {
+            --theme-accent: #FF80BF;
+            --theme-glow: rgba(255, 128, 191, 0.85);
+            --theme-border: rgba(255, 128, 191, 0.35);
+            --theme-text-accent: #FF80BF;
+        }
+
+        [data-theme="emerald"] {
+            --theme-accent: #00FF87;
+            --theme-glow: rgba(0, 255, 135, 0.8);
+            --theme-border: rgba(0, 255, 135, 0.35);
+            --theme-text-accent: #00FF87;
+        }
+
+        /* High-Contrast Pitch Black for Mirror Reflection */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1.5rem;
+        }
+
+        /* Text Effects for Glass */
+        .mirror-glow { text-shadow: 0 0 12px rgba(255, 255, 255, 0.8); }
+        .theme-glow { text-shadow: 0 0 16px var(--theme-glow); color: var(--theme-text-accent); }
+        .danger-glow { text-shadow: 0 0 14px rgba(255, 69, 58, 0.8); color: #ff453a; }
+
+        /* Utility Layout Classes (Tailwind-compatible offline CSS) */
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .items-center { align-items: center; }
+        .items-start { align-items: flex-start; }
+        .justify-between { justify-content: space-between; }
+        .justify-center { justify-content: center; }
+        .grid { display: grid; }
+        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .grid-cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+        .gap-2 { gap: 0.5rem; }
+        .gap-4 { gap: 1rem; }
+        .gap-6 { gap: 1.5rem; }
+        .w-full { width: 100%; }
+        .h-full { height: 100%; }
+        .relative { position: relative; }
+        .absolute { position: absolute; }
+        .hidden { display: none !important; }
+
+        /* Glass Panel Container Styling */
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--theme-border);
+            border-radius: 12px;
+            padding: 1rem;
+            backdrop-filter: blur(8px);
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--theme-border);
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-glass:hover {
+            background: var(--theme-accent);
+            color: #000;
+            box-shadow: 0 0 12px var(--theme-glow);
+        }
+
+        /* Voice Ring Animations */
+        .voice-pulse {
+            animation: pulse-ring 1.5s infinite cubic-bezier(0.66, 0, 0, 1);
+        }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 var(--theme-glow); }
+            100% { box-shadow: 0 0 0 16px rgba(0, 0, 0, 0); }
+        }
+
+        /* Birthday Banner Glow */
+        .birthday-glow {
+            border: 2px solid #FFD700;
+            box-shadow: 0 0 25px #FFD700, inset 0 0 10px #FFD700;
+            animation: bday-pulse 1.5s infinite alternate;
+        }
+        @keyframes bday-pulse {
+            from { border-color: rgba(255, 215, 0, 0.4); }
+            to { border-color: rgba(255, 215, 0, 1); }
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.8); }
+        ::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+    </style>
+</head>
+<body class="h-full w-full">
+
+    <!-- TOP ROW: Digital Clock & Date (Left) | Calendar Grid & Settings (Right) -->
+    <header class="grid grid-cols-2 gap-6 items-start">
+        <!-- Left: Digital Clock -->
+        <div class="flex flex-col items-start">
+            <div id="clock" class="theme-glow" style="font-size: 4rem; font-weight: 700; font-family: monospace; line-height: 1;">
+                00:00<span id="seconds" style="font-size: 2rem; opacity: 0.8;">:00</span>
+            </div>
+            <div id="full-date" class="mirror-glow" style="font-size: 1.25rem; font-weight: 300; margin-top: 0.5rem; letter-spacing: 1px; color: #d1d5db;">
+                Loading local time...
+            </div>
+            <div id="greeting-box" class="glass-panel" style="margin-top: 1rem; width: 100%;">
+                <div class="flex items-center gap-2">
+                    <span id="user-avatar" style="font-size: 1.5rem;">👤</span>
+                    <span id="mirror-greeting" class="theme-glow" style="font-size: 1.15rem; font-weight: 600;">Welcome!</span>
+                </div>
+                <div id="bday-banner" class="birthday-glow hidden" style="margin-top: 0.5rem; padding: 0.5rem; border-radius: 8px; text-align: center;">
+                    <span style="font-size: 1.2rem;">🎂 Happy Birthday! 🎉</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Calendar & Control Panel -->
+        <div class="flex flex-col items-end">
+            <div class="flex items-center gap-2" style="margin-bottom: 0.5rem;">
+                <button onclick="toggleVoiceListening()" id="mic-btn" class="btn-glass" title="Voice Input">🎙️ Voice Note</button>
+                <button onclick="openUserModal()" class="btn-glass" title="Profiles">👥 Profiles</button>
+                <button onclick="openThemeModal()" class="btn-glass" title="Theme">🎨 Theme</button>
+            </div>
+            
+            <!-- Calendar Card -->
+            <div class="glass-panel" style="width: 280px;">
+                <div class="flex justify-between items-center" style="margin-bottom: 0.5rem;">
+                    <span id="cal-month-year" class="theme-glow" style="font-weight: 600;">Month Year</span>
+                </div>
+                <div class="grid grid-cols-7 text-center" style="font-size: 0.75rem; opacity: 0.7; margin-bottom: 0.25rem;">
+                    <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+                </div>
+                <div id="cal-days-grid" class="grid grid-cols-7 text-center gap-1" style="font-size: 0.85rem;">
+                    <!-- Calendar Days Populated via JS -->
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MIDDLE ROW: Live Offline Camera Motion & Voice Bar -->
+    <main class="flex flex-col items-center justify-center relative" style="flex-grow: 1; margin: 1rem 0;">
+        
+        <!-- Live Voice Assistant Feedback Status -->
+        <div id="voice-transcript-box" class="glass-panel hidden" style="width: 80%; max-width: 500px; text-align: center; margin-bottom: 1rem;">
+            <div class="flex items-center justify-center gap-2">
+                <span style="display:inline-block; width:10px; height:10px; background:red; border-radius:50%;" class="voice-pulse"></span>
+                <span id="voice-transcript" class="theme-glow" style="font-style: italic;">Listening for notes...</span>
+            </div>
+        </div>
+
+        <!-- Hidden Canvas for Local Motion Capture -->
+        <video id="webcam-feed" class="hidden" autoplay playsinline muted></video>
+        <canvas id="motion-canvas" class="hidden" width="320" height="240"></canvas>
+        <canvas id="snap-canvas" class="hidden" width="640" height="480"></canvas>
+
+        <!-- Detection Status Overlay -->
+        <div class="glass-panel flex items-center gap-4">
+            <span id="visitor-status-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #00FF87;"></span>
+            <span id="visitor-status-text" class="mirror-glow" style="font-size: 0.9rem;">Mode: Owner Identified</span>
+            <button onclick="toggleVisitorModeSim()" class="btn-glass" style="font-size: 0.75rem;">Simulate Visitor</button>
+        </div>
+    </main>
+
+    <!-- BOTTOM ROW: Offline Notes & Reminder Engine -->
+    <footer class="grid grid-cols-2 gap-6 items-end">
+        <!-- Notes & Reminders Panel -->
+        <div id="notes-container" class="glass-panel flex flex-col justify-between" style="height: 180px;">
+            <div class="flex justify-between items-center" style="margin-bottom: 0.5rem;">
+                <span class="theme-glow" style="font-weight: 600;">📌 Tasks & Reminders</span>
+                <button onclick="addManualNotePrompt()" class="btn-glass" style="font-size: 0.75rem;">+ Add Note</button>
+            </div>
+            <div id="notes-list" style="overflow-y: auto; max-height: 120px; font-size: 0.85rem;" class="flex flex-col gap-2">
+                <!-- Notes rendering -->
+            </div>
+        </div>
+
+        <!-- Visitor Intruder Snapshot Log -->
+        <div class="glass-panel flex flex-col justify-between" style="height: 180px;">
+            <div class="flex justify-between items-center" style="margin-bottom: 0.5rem;">
+                <span class="danger-glow" style="font-weight: 600;">📸 Offline Visitor Log</span>
+                <button onclick="clearVisitorLogs()" class="btn-glass" style="font-size: 0.75rem;">Clear</button>
+            </div>
+            <div id="intruder-gallery" class="flex gap-2" style="overflow-x: auto; height: 120px; items-center;">
+                <div style="font-size: 0.75rem; opacity: 0.5;">No unknown visitors logged.</div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- LOCAL OFFLINE APPLICATION LOGIC -->
+    <script>
+        // --- 1. LOCAL STATE & STORAGE ENGINE ---
+        let currentTheme = localStorage.getItem('mm_theme') || 'cyan';
+        let users = JSON.parse(localStorage.getItem('mm_users')) || [
+            { id: 1, name: 'Owner', dob: '2000-01-01', greeting: 'You look fresh today!' }
+        ];
+        let activeUserId = parseInt(localStorage.getItem('mm_active_user')) || 1;
+        let notes = JSON.parse(localStorage.getItem('mm_notes')) || [];
+        let visitorLogs = JSON.parse(localStorage.getItem('mm_visitor_logs')) || [];
+        let isUnknownVisitor = false;
+        let isListening = false;
+        let recognition = null;
+        let audioCtx = null;
+
+        // Apply Theme Globally
+        document.documentElement.setAttribute('data-theme', currentTheme);
+
+        // --- 2. LOCAL AUDIO SYNTHESIZER (No External Sounds Required) ---
+        function playLocalChime(type = 'chime') {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'chime') {
+                    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                    osc.frequency.exponentialRampToValueAtTime(659.25, audioCtx.currentTime + 0.3); // E5
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.6);
+                } else if (type === 'alarm') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+                    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.5);
+                }
+            } catch(e) {
+                console.log("Audio synthesis blocked or unsupported.");
+            }
+        }
+
+        // Offline Text-to-Speech Engine
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.95;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // --- 3. CLOCK & CALENDAR ENGINE ---
+        function updateClock() {
+            const now = new Date();
+            const hrs = String(now.getHours()).padStart(2, '0');
+            const mins = String(now.getMinutes()).padStart(2, '0');
+            const secs = String(now.getSeconds()).padStart(2, '0');
+            
+            document.getElementById('clock').innerHTML = `${hrs}:${mins}<span id="seconds" style="font-size: 2rem; opacity: 0.8;">:${secs}</span>`;
+            
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('full-date').textContent = now.toLocaleDateString(undefined, options);
+
+            checkAlarms(now);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function renderCalendar() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const today = now.getDate();
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            document.getElementById('cal-month-year').textContent = `${monthNames[month]} ${year}`;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            const grid = document.getElementById('cal-days-grid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < firstDay; i++) {
+                grid.innerHTML += `<div></div>`;
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const isToday = day === today;
+                const style = isToday 
+                    ? `background: var(--theme-accent); color: #000; font-weight: bold; border-radius: 50%; box-shadow: 0 0 8px var(--theme-glow);` 
+                    : `opacity: 0.8;`;
+                grid.innerHTML += `<div style="padding: 2px; ${style}">${day}</div>`;
+            }
+        }
+        renderCalendar();
+
+        // --- 4. USER & BIRTHDAY MANAGEMENT ---
+        function updateGreeting() {
+            const activeUser = users.find(u => u.id === activeUserId) || users[0];
+            const greetingEl = document.getElementById('mirror-greeting');
+            const bdayBanner = document.getElementById('bday-banner');
+
+            if (isUnknownVisitor) {
+                greetingEl.textContent = "Security Notice: Unknown Visitor Detected";
+                greetingEl.className = "danger-glow";
+                bdayBanner.classList.add('hidden');
+                document.getElementById('notes-container').style.opacity = '0.2';
+                return;
+            }
+
+            document.getElementById('notes-container').style.opacity = '1';
+            greetingEl.className = "theme-glow";
+            greetingEl.textContent = `Hello, ${activeUser.name}! ${activeUser.greeting || 'You look great today.'}`;
+
+            // Check Birthday (MM-DD)
+            const today = new Date();
+            const todayStr = String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            if (activeUser.dob && activeUser.dob.endsWith(todayStr)) {
+                bdayBanner.classList.remove('hidden');
+                playLocalChime('chime');
+            } else {
+                bdayBanner.classList.add('hidden');
+            }
+        }
+        updateGreeting();
+
+        // --- 5. LOCAL MOTION & CAMERA ENGINE ---
+        async function initOfflineCamera() {
+            try {
+                const video = document.getElementById('webcam-feed');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = stream;
+            } catch(err) {
+                console.log("Local camera unavailable or permission denied.");
+            }
+        }
+        initOfflineCamera();
+
+        function captureVisitorSnapshot() {
+            const video = document.getElementById('webcam-feed');
+            const canvas = document.getElementById('snap-canvas');
+            const ctx = canvas.getContext('2d');
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                
+                const newLog = {
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleTimeString(),
+                    image: dataUrl
+                };
+                visitorLogs.unshift(newLog);
+                localStorage.setItem('mm_visitor_logs', JSON.stringify(visitorLogs));
+                renderVisitorLogs();
+                playLocalChime('alarm');
+            }
+        }
+
+        function toggleVisitorModeSim() {
+            isUnknownVisitor = !isUnknownVisitor;
+            const dot = document.getElementById('visitor-status-dot');
+            const text = document.getElementById('visitor-status-text');
+
+            if (isUnknownVisitor) {
+                dot.style.background = '#FF453A';
+                text.textContent = 'Mode: Unknown Visitor Detected';
+                captureVisitorSnapshot();
+            } else {
+                dot.style.background = '#00FF87';
+                text.textContent = 'Mode: Owner Identified';
+            }
+            updateGreeting();
+        }
+
+        function renderVisitorLogs() {
+            const gallery = document.getElementById('intruder-gallery');
+            if (visitorLogs.length === 0) {
+                gallery.innerHTML = `<div style="font-size: 0.75rem; opacity: 0.5;">No unknown visitors logged.</div>`;
+                return;
+            }
+            gallery.innerHTML = visitorLogs.map(log => `
+                <div style="flex-shrink: 0; text-align: center;">
+                    <img src="${log.image}" style="width: 70px; height: 50px; border-radius: 6px; border: 1px solid #FF453A; object-fit: cover;">
+                    <div style="font-size: 0.65rem; opacity: 0.7;">${log.timestamp}</div>
+                </div>
+            `).join('');
+        }
+        renderVisitorLogs();
+
+        function clearVisitorLogs() {
+            visitorLogs = [];
+            localStorage.removeItem('mm_visitor_logs');
+            renderVisitorLogs();
+        }
+
+        // --- 6. OFFLINE VOICE SPEECH ENGINE ---
+        function initVoiceRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+
+            recognition.onstart = () => {
+                isListening = true;
+                document.getElementById('voice-transcript-box').classList.remove('hidden');
+                document.getElementById('voice-transcript').textContent = 'Listening... Speak your note.';
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(r => r[0].transcript)
+                    .join('');
+                document.getElementById('voice-transcript').textContent = `"${transcript}"`;
+                
+                if (event.results[0].isFinal) {
+                    processVoiceNote(transcript);
+                }
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                setTimeout(() => {
+                    document.getElementById('voice-transcript-box').classList.add('hidden');
+                }, 2000);
+            };
+        }
+        initVoiceRecognition();
+
+        function toggleVoiceListening() {
+            if (!recognition) {
+                alert("Speech recognition is not supported natively in this browser.");
+                return;
+            }
+            if (isListening) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+
+        function processVoiceNote(text) {
+            const newNote = {
+                id: Date.now(),
+                userId: activeUserId,
+                text: text,
+                time: "Today",
+                triggered: false
+            };
+            notes.push(newNote);
+            localStorage.setItem('mm_notes', JSON.stringify(notes));
+            renderNotes();
+            playLocalChime('chime');
+            speakText(`Note saved: ${text}`);
+        }
+
+        // --- 7. TASKS & ALARMS ENGINE ---
+        function renderNotes() {
+            const list = document.getElementById('notes-list');
+            const userNotes = notes.filter(n => n.userId === activeUserId);
+            
+            if (userNotes.length === 0) {
+                list.innerHTML = `<div style="opacity:0.5;">No active notes or reminders.</div>`;
+                return;
+            }
+
+            list.innerHTML = userNotes.map(n => `
+                <div class="flex justify-between items-center" style="background: rgba(255,255,255,0.05); padding: 0.4rem; border-radius: 6px;">
+                    <span>• ${n.text}</span>
+                    <button onclick="deleteNote(${n.id})" style="background:none; border:none; color:#FF453A; cursor:pointer;">✕</button>
+                </div>
+            `).join('');
+        }
+        renderNotes();
+
+        function addManualNotePrompt() {
+            const text = prompt("Enter note/reminder text:");
+            if (text) {
+                processVoiceNote(text);
+            }
+        }
+
+        function deleteNote(id) {
+            notes = notes.filter(n => n.id !== id);
+            localStorage.setItem('mm_notes', JSON.stringify(notes));
+            renderNotes();
+        }
+
+        function checkAlarms(now) {
+            // Alarm trigger logic when scheduled time arrives
+        }
+
+        // Theme Switcher Logic
+        function openThemeModal() {
+            const themes = ['cyan', 'golden', 'pink', 'emerald'];
+            const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
+            currentTheme = themes[nextIdx];
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            localStorage.setItem('mm_theme', currentTheme);
+            renderCalendar();
+        }
+
+        function openUserModal() {
+            const name = prompt("Enter profile name:", "User");
+            if (name) {
+                const newUser = { id: Date.now(), name: name, dob: '', greeting: 'Good day!' };
+                users.push(newUser);
+                activeUserId = newUser.id;
+                localStorage.setItem('mm_users', JSON.stringify(users));
+                localStorage.setItem('mm_active_user', activeUserId);
+                updateGreeting();
+                renderNotes();
+            }
+        }
+    </script>
+</body>
+</html>
